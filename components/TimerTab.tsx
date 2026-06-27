@@ -36,6 +36,23 @@ function getPhase(ratio: number): PhaseInfo {
   return { label: "Early fast", bg: "rgba(142,142,147,0.12)", color: "#8E8E93" };
 }
 
+function formatDuration(ms: number): string {
+  const totalMins = Math.floor(ms / 60000);
+  const h = Math.floor(totalMins / 60);
+  const m = totalMins % 60;
+  return m === 0 ? `${h}h` : `${h}h ${m}m`;
+}
+
+function formatShortDate(ts: number): string {
+  const d = new Date(ts);
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  if (d.toDateString() === today.toDateString()) return "Today";
+  if (d.toDateString() === yesterday.toDateString()) return "Yesterday";
+  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+}
+
 function getWeekDays(): Date[] {
   const now = new Date();
   const dow = now.getDay();
@@ -70,19 +87,26 @@ export default function TimerTab({ state, onChange, streak }: Props) {
   const ringColor = ratio >= 1 ? "#34C759" : "#FF6B6B";
   const phase = state.fasting ? getPhase(ratio) : null;
 
-  // SVG ring geometry
-  const CX = 140;
-  const CY = 140;
-  const R = 112;
-  const STROKE = 12;
+  // SVG ring geometry — slightly larger for more presence
+  const CX = 155;
+  const CY = 155;
+  const R = 130;
+  const STROKE = 13;
   const circumference = 2 * Math.PI * R;
   const lap1 = Math.min(ratio, 1);
   const lap1Dash = lap1 * circumference;
 
-  const R2 = 96;
+  const R2 = 113;
   const C2 = 2 * Math.PI * R2;
   const lap2 = ratio > 1 ? Math.min(ratio - 1, 1) : 0;
   const lap2Dash = lap2 * C2;
+
+  // Last completed fast
+  const lastFast = state.sessions.length > 0
+    ? state.sessions[state.sessions.length - 1]
+    : null;
+  const lastFastDur = lastFast ? lastFast.end - lastFast.start : 0;
+  const lastFastHitGoal = lastFast ? lastFastDur >= lastFast.goal * 3600000 : false;
 
   // Week dots
   const weekDays = getWeekDays();
@@ -261,11 +285,33 @@ export default function TimerTab({ state, onChange, streak }: Props) {
         </div>
 
         {/* Ring timer */}
-        <div className="flex justify-center">
-          <svg width="280" height="280" viewBox="0 0 280 280">
-            {/* Track */}
-            <circle cx={CX} cy={CY} r={R} fill="none" stroke="#F5F5F7" strokeWidth={STROKE} />
-            {/* Progress lap 1 — only render when there's progress to avoid a dot at 0% */}
+        <div className="flex flex-col items-center">
+          {!state.fasting && lastFast && (
+            <span
+              style={{
+                fontSize: "11px",
+                fontWeight: 600,
+                color: "#8E8E93",
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+                marginBottom: "4px",
+              }}
+            >
+              last fast
+            </span>
+          )}
+          <svg width="310" height="310" viewBox="0 0 310 310">
+            {/* Track — dimmed when idle */}
+            <circle
+              cx={CX}
+              cy={CY}
+              r={R}
+              fill="none"
+              stroke={state.fasting ? "#F5F5F7" : "#EFEFEF"}
+              strokeWidth={STROKE}
+              opacity={state.fasting ? 1 : 0.7}
+            />
+            {/* Progress lap 1 */}
             {lap1 > 0 && (
               <circle
                 cx={CX}
@@ -301,35 +347,123 @@ export default function TimerTab({ state, onChange, streak }: Props) {
                 style={{ transition: "stroke-dasharray 0.5s linear" }}
               />
             )}
-            {/* Elapsed time */}
-            <text
-              x={CX}
-              y={CY - 12}
-              textAnchor="middle"
-              dominantBaseline="middle"
-              fill="#1C1C1E"
-              fontSize="30"
-              fontFamily="ui-monospace, 'SF Mono', monospace"
-              fontWeight="700"
-            >
-              {state.fasting ? formatHMS(elapsed) : "00:00:00"}
-            </text>
-            {/* "elapsed" label */}
-            <text
-              x={CX}
-              y={CY + 18}
-              textAnchor="middle"
-              dominantBaseline="middle"
-              fill="#8E8E93"
-              fontSize="11"
-              fontFamily="-apple-system, sans-serif"
-              letterSpacing="1"
-            >
-              elapsed
-            </text>
-          </svg>
 
-          {/* Phase chip — positioned below the ring */}
+            {/* Active timer text */}
+            {state.fasting && (
+              <>
+                <text
+                  x={CX}
+                  y={CY - 12}
+                  textAnchor="middle"
+                  dominantBaseline="middle"
+                  fill="#1C1C1E"
+                  fontSize="32"
+                  fontFamily="ui-monospace, 'SF Mono', monospace"
+                  fontWeight="700"
+                >
+                  {formatHMS(elapsed)}
+                </text>
+                <text
+                  x={CX}
+                  y={CY + 20}
+                  textAnchor="middle"
+                  dominantBaseline="middle"
+                  fill="#8E8E93"
+                  fontSize="11"
+                  fontFamily="-apple-system, sans-serif"
+                  letterSpacing="1"
+                >
+                  elapsed
+                </text>
+              </>
+            )}
+
+            {/* Idle: last fast summary card via foreignObject */}
+            {!state.fasting && (
+              <foreignObject x={CX - 95} y={CY - 68} width="190" height="136">
+                <div
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "6px",
+                  }}
+                >
+                  {lastFast ? (
+                    <>
+                      {/* Duration */}
+                      <span
+                        style={{
+                          fontSize: "36px",
+                          fontWeight: 800,
+                          color: "#1C1C1E",
+                          fontFamily: "ui-monospace, 'SF Mono', monospace",
+                          lineHeight: 1,
+                        }}
+                      >
+                        {formatDuration(lastFastDur)}
+                      </span>
+                      {/* Date */}
+                      <span
+                        style={{
+                          fontSize: "13px",
+                          color: "#8E8E93",
+                          fontWeight: 500,
+                          fontFamily: "-apple-system, sans-serif",
+                        }}
+                      >
+                        {formatShortDate(lastFast.start)}
+                      </span>
+                      {/* Goal badge */}
+                      <div
+                        style={{
+                          marginTop: "4px",
+                          background: lastFastHitGoal
+                            ? "rgba(52,199,89,0.12)"
+                            : "rgba(142,142,147,0.12)",
+                          borderRadius: "50px",
+                          padding: "4px 14px",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "5px",
+                        }}
+                      >
+                        <span style={{ fontSize: "11px" }}>
+                          {lastFastHitGoal ? "✓" : "○"}
+                        </span>
+                        <span
+                          style={{
+                            fontSize: "12px",
+                            fontWeight: 600,
+                            color: lastFastHitGoal ? "#34C759" : "#8E8E93",
+                            fontFamily: "-apple-system, sans-serif",
+                          }}
+                        >
+                          {lastFastHitGoal
+                            ? `${lastFast.goal}h goal hit`
+                            : `${lastFast.goal}h goal missed`}
+                        </span>
+                      </div>
+                    </>
+                  ) : (
+                    <span
+                      style={{
+                        fontSize: "14px",
+                        color: "#8E8E93",
+                        fontFamily: "-apple-system, sans-serif",
+                        textAlign: "center",
+                      }}
+                    >
+                      No fasts yet.{"\n"}Start your first one.
+                    </span>
+                  )}
+                </div>
+              </foreignObject>
+            )}
+          </svg>
         </div>
 
         {/* Phase chip */}
