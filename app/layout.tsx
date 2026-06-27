@@ -1,28 +1,25 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
-import { Space_Mono } from "next/font/google";
 import "./globals.css";
 
-const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
-const spaceMono = Space_Mono({
+const inter = Inter({
   subsets: ["latin"],
-  weight: ["400", "700"],
-  variable: "--font-mono",
+  variable: "--font-inter",
 });
 
 export const metadata: Metadata = {
   title: "FAST//TRACK",
-  description: "Intermittent fasting tracker — brutalist, offline-first PWA.",
+  description: "Intermittent fasting tracker — clean, offline-first PWA.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
-    statusBarStyle: "black-translucent",
+    statusBarStyle: "default",
     title: "FAST//TRACK",
   },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0a0a0a",
+  themeColor: "#FFFFFF",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
@@ -35,13 +32,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="bg-[#0a0a0a]">
+    <html lang="en" className="bg-white">
       <head>
         <link rel="apple-touch-icon" href="/icons/icon-192.png" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
       </head>
-      <body className={`${inter.variable} ${spaceMono.variable} font-sans`}>
+      <body className={`${inter.variable} font-sans`}>
         {children}
       </body>
     </html>

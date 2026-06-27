@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useRef } from "react";
 import {
   Chart,
   BarElement,
@@ -21,10 +20,12 @@ interface Props {
   goalHours: number;
 }
 
-const CHART_FONT = "'Space Mono', monospace";
-const GRID_COLOR = "#1a1a1a";
-const TICK_COLOR = "#666";
-const CARD_BG = "#141414";
+const CHART_FONT = "ui-monospace, 'SF Mono', monospace";
+const GRID_COLOR = "#EBEBEB";
+const TICK_COLOR = "#8E8E93";
+const CARD_BG = "#F5F5F7";
+const CARD_RADIUS = "20px";
+const CARD_SHADOW = "0 2px 12px rgba(0,0,0,0.06)";
 
 function StatCard({
   label,
@@ -37,17 +38,45 @@ function StatCard({
 }) {
   return (
     <div
-      className="border border-[#2a2a2a] p-3 flex flex-col gap-1"
-      style={{ borderRadius: "4px", background: CARD_BG }}
+      style={{
+        background: CARD_BG,
+        borderRadius: CARD_RADIUS,
+        padding: "16px",
+        boxShadow: CARD_SHADOW,
+        display: "flex",
+        flexDirection: "column",
+        gap: "4px",
+      }}
     >
-      <span className="font-mono text-[10px] uppercase tracking-widest text-[#666]">
+      <span
+        style={{
+          fontSize: "11px",
+          fontWeight: 600,
+          color: "#8E8E93",
+          textTransform: "uppercase",
+          letterSpacing: "0.06em",
+        }}
+      >
         {label}
       </span>
-      <span className="font-mono text-2xl font-bold text-white leading-tight">
+      <span
+        style={{
+          fontSize: "24px",
+          fontWeight: 700,
+          color: "#1C1C1E",
+          lineHeight: 1.1,
+          fontFamily: "ui-monospace, 'SF Mono', monospace",
+        }}
+      >
         {value}
       </span>
       {sub && (
-        <span className="font-mono text-[10px] text-[#666] uppercase tracking-wide">
+        <span
+          style={{
+            fontSize: "11px",
+            color: "#8E8E93",
+          }}
+        >
           {sub}
         </span>
       )}
@@ -58,56 +87,101 @@ function StatCard({
 function SectionHeader({ children }: { children: string }) {
   return (
     <h2
-      className="font-mono text-[11px] uppercase tracking-widest text-[#666] mb-3"
-      style={{ letterSpacing: "0.15em" }}
+      style={{
+        fontSize: "11px",
+        fontWeight: 700,
+        color: "#8E8E93",
+        textTransform: "uppercase",
+        letterSpacing: "0.08em",
+        marginBottom: "10px",
+      }}
     >
       {children}
     </h2>
   );
 }
 
-const baseBarOptions = (
+function ChartCard({ children, height = 160 }: { children: React.ReactNode; height?: number }) {
+  return (
+    <div
+      style={{
+        background: CARD_BG,
+        borderRadius: CARD_RADIUS,
+        padding: "14px",
+        boxShadow: CARD_SHADOW,
+        height: `${height}px`,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function baseBarOptions(
   yMin: number,
   yMax: number,
   yLabel?: (v: number) => string
-): ChartOptions<"bar"> => ({
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: {
-    legend: { display: false },
-    tooltip: {
-      backgroundColor: "#1a1a1a",
-      titleColor: "#fff",
-      bodyColor: "#fff",
-      titleFont: { family: CHART_FONT, size: 10 },
-      bodyFont: { family: CHART_FONT, size: 10 },
-      callbacks: {
-        label: (ctx) =>
-          yLabel ? yLabel(ctx.parsed.y) : String(ctx.parsed.y),
+): ChartOptions<"bar"> {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: "#1C1C1E",
+        titleColor: "#fff",
+        bodyColor: "#fff",
+        cornerRadius: 8,
+        titleFont: { family: CHART_FONT, size: 10 },
+        bodyFont: { family: CHART_FONT, size: 10 },
+        callbacks: {
+          label: (ctx) => yLabel ? yLabel(ctx.parsed.y) : String(ctx.parsed.y),
+        },
       },
     },
-  },
-  scales: {
-    x: {
-      grid: { color: GRID_COLOR },
-      ticks: {
-        color: TICK_COLOR,
-        font: { family: CHART_FONT, size: 9 },
-        maxRotation: 0,
+    scales: {
+      x: {
+        grid: { color: GRID_COLOR },
+        ticks: {
+          color: TICK_COLOR,
+          font: { family: CHART_FONT, size: 10 },
+          maxRotation: 0,
+        },
+        border: { color: GRID_COLOR },
       },
-      border: { color: GRID_COLOR },
-    },
-    y: {
-      min: yMin,
-      max: yMax,
-      grid: { color: GRID_COLOR },
-      ticks: {
-        color: TICK_COLOR,
-        font: { family: CHART_FONT, size: 9 },
-        callback: (v) => (yLabel ? yLabel(v as number) : String(v)),
+      y: {
+        min: yMin,
+        max: yMax,
+        grid: { color: GRID_COLOR },
+        ticks: {
+          color: TICK_COLOR,
+          font: { family: CHART_FONT, size: 10 },
+          callback: (v) => yLabel ? yLabel(v as number) : String(v),
+        },
+        border: { color: GRID_COLOR },
       },
-      border: { color: GRID_COLOR },
     },
+  };
+}
+
+// Goal line plugin for duration chart
+const goalLinePlugin = (goalHours: number) => ({
+  id: "goalLine",
+  afterDraw(chart: Chart) {
+    const { ctx, scales, chartArea } = chart;
+    if (!scales.y || !chartArea) return;
+    const y = scales.y.getPixelForValue(goalHours);
+    if (y < chartArea.top || y > chartArea.bottom) return;
+    ctx.save();
+    ctx.strokeStyle = "#8E8E93";
+    ctx.setLineDash([4, 3]);
+    ctx.lineWidth = 1.5;
+    ctx.globalAlpha = 0.5;
+    ctx.beginPath();
+    ctx.moveTo(chartArea.left, y);
+    ctx.lineTo(chartArea.right, y);
+    ctx.stroke();
+    ctx.restore();
   },
 });
 
@@ -117,37 +191,28 @@ export default function AnalyticsTab({ sessions, goalHours }: Props) {
 
   // ── Overview stats ──────────────────────────────────────────────────────────
   const last28 = sessions.filter((s) => s.start >= now - 28 * DAY);
-  const completed = last28.filter(
-    (s) => s.end && (s.end - s.start) / 3600000 >= s.goal
-  );
+  const completed = last28.filter((s) => s.end && (s.end - s.start) / 3600000 >= s.goal);
   const totalFasts = last28.length;
   const avgFastHours =
     last28.length > 0
-      ? last28.reduce((acc, s) => acc + (s.end - s.start) / 3600000, 0) /
-        last28.length
+      ? last28.reduce((acc, s) => acc + (s.end - s.start) / 3600000, 0) / last28.length
       : 0;
-  const goalHitRate =
-    last28.length > 0
-      ? Math.round((completed.length / last28.length) * 100)
-      : 0;
+  const goalHitRate = last28.length > 0 ? Math.round((completed.length / last28.length) * 100) : 0;
 
-  function avgTime(sessions: FastSession[], getTs: (s: FastSession) => number): string {
-    if (sessions.length === 0) return "--:--";
-    const totalMins = sessions.reduce((acc, s) => {
+  function avgTime(arr: FastSession[], getTs: (s: FastSession) => number): string {
+    if (arr.length === 0) return "—";
+    const totalMins = arr.reduce((acc, s) => {
       const d = new Date(getTs(s));
       return acc + d.getHours() * 60 + d.getMinutes();
     }, 0);
-    const avg = Math.round(totalMins / sessions.length);
+    const avg = Math.round(totalMins / arr.length);
     return `${String(Math.floor(avg / 60)).padStart(2, "0")}:${String(avg % 60).padStart(2, "0")}`;
   }
 
   const usualStart = avgTime(last28, (s) => s.start);
-  const firstMeal = avgTime(
-    last28.filter((s) => s.end),
-    (s) => s.end
-  );
+  const firstMeal = avgTime(last28.filter((s) => s.end), (s) => s.end);
 
-  // ── Duration bar chart (last 14 days) ───────────────────────────────────────
+  // ── Duration chart (last 14 days) ────────────────────────────────────────────
   const last14Labels: string[] = [];
   const last14Durations: number[] = [];
   const last14Colors: string[] = [];
@@ -157,17 +222,13 @@ export default function AnalyticsTab({ sessions, goalHours }: Props) {
     dayStart.setHours(0, 0, 0, 0);
     const dayKey = localDateKey(dayStart.getTime());
     const d = new Date(dayStart);
-    last14Labels.push(
-      `${d.getDate()}/${d.getMonth() + 1}`
-    );
-    const daySession = sessions.find(
-      (s) => localDateKey(s.start) === dayKey && s.end
-    );
+    last14Labels.push(`${d.getDate()}/${d.getMonth() + 1}`);
+    const daySession = sessions.find((s) => localDateKey(s.start) === dayKey && s.end);
     const dur = daySession
       ? Math.round(((daySession.end - daySession.start) / 3600000) * 10) / 10
       : 0;
     last14Durations.push(dur);
-    last14Colors.push(dur >= goalHours ? "#00C853" : dur > 0 ? "#FF3B30" : "#1a1a1a");
+    last14Colors.push(dur >= goalHours ? "#34C759" : dur > 0 ? "#FF6B6B" : "#E5E5EA");
   }
 
   const durationData: ChartData<"bar"> = {
@@ -178,21 +239,11 @@ export default function AnalyticsTab({ sessions, goalHours }: Props) {
         backgroundColor: last14Colors,
         borderColor: last14Colors,
         borderWidth: 0,
-        barPercentage: 0.7,
+        borderRadius: 6,
+        barPercentage: 0.72,
       },
     ],
   };
-
-  const durationOptions: ChartOptions<"bar"> = {
-    ...baseBarOptions(10, 22, (v) => `${v}h`),
-    plugins: {
-      ...baseBarOptions(10, 22, (v) => `${v}h`).plugins,
-      annotation: undefined,
-    },
-  };
-
-  // Goal line via dataset approach (a thin dataset line as workaround)
-  // We'll draw the dashed line manually on the canvas
 
   // ── Start time distribution ─────────────────────────────────────────────────
   const startHours: Record<number, number> = {};
@@ -201,15 +252,17 @@ export default function AnalyticsTab({ sessions, goalHours }: Props) {
     const h = new Date(s.start).getHours();
     if (h >= 17 && h <= 23) startHours[h]++;
   }
+  const maxStart = Math.max(...Object.values(startHours), 1);
 
   const startDistData: ChartData<"bar"> = {
     labels: Object.keys(startHours).map((h) => `${h}:00`),
     datasets: [
       {
         data: Object.values(startHours),
-        backgroundColor: "#FF3B30",
-        borderColor: "#FF3B30",
+        backgroundColor: "#FF6B6B",
+        borderColor: "#FF6B6B",
         borderWidth: 0,
+        borderRadius: 6,
         barPercentage: 0.65,
       },
     ],
@@ -222,15 +275,17 @@ export default function AnalyticsTab({ sessions, goalHours }: Props) {
     const h = new Date(s.end).getHours();
     if (h >= 10 && h <= 16) endHours[h]++;
   }
+  const maxEnd = Math.max(...Object.values(endHours), 1);
 
   const endDistData: ChartData<"bar"> = {
     labels: Object.keys(endHours).map((h) => `${h}:00`),
     datasets: [
       {
         data: Object.values(endHours),
-        backgroundColor: "#00C853",
-        borderColor: "#00C853",
+        backgroundColor: "#34C759",
+        borderColor: "#34C759",
         borderWidth: 0,
+        borderRadius: 6,
         barPercentage: 0.65,
       },
     ],
@@ -244,8 +299,8 @@ export default function AnalyticsTab({ sessions, goalHours }: Props) {
   for (let w = 4; w >= 1; w--) {
     weeklyLabels.push(`W-${w}`);
     const weekSessions: FastSession[] = [];
-    for (let d = 0; d < 7; d++) {
-      const dayStart = new Date(now - (w * 7 - d) * DAY);
+    for (let dd = 0; dd < 7; dd++) {
+      const dayStart = new Date(now - (w * 7 - dd) * DAY);
       dayStart.setHours(0, 0, 0, 0);
       const dayKey = localDateKey(dayStart.getTime());
       const match = sessions.find((s) => localDateKey(s.start) === dayKey && s.end);
@@ -254,12 +309,9 @@ export default function AnalyticsTab({ sessions, goalHours }: Props) {
     const qualifying = weekSessions.filter(
       (s) => (s.end - s.start) / 3600000 >= s.goal
     ).length;
-    const pct =
-      weekSessions.length > 0
-        ? Math.round((qualifying / 7) * 100)
-        : 0;
+    const pct = Math.round((qualifying / 7) * 100);
     weeklyPcts.push(pct);
-    weeklyColors.push(pct >= 80 ? "#00C853" : pct >= 50 ? "#F57C00" : "#FF3B30");
+    weeklyColors.push(pct >= 80 ? "#34C759" : pct >= 50 ? "#F59E0B" : "#FF6B6B");
   }
 
   const weeklyData: ChartData<"bar"> = {
@@ -270,132 +322,114 @@ export default function AnalyticsTab({ sessions, goalHours }: Props) {
         backgroundColor: weeklyColors,
         borderColor: weeklyColors,
         borderWidth: 0,
+        borderRadius: 6,
         barPercentage: 0.55,
       },
     ],
   };
 
-  const countOptions = baseBarOptions(0, 100, (v) => `${v}%`);
-  const distOptions = baseBarOptions(0, Math.max(...Object.values(startHours), 1) + 1, String);
-  const endDistOptions = baseBarOptions(0, Math.max(...Object.values(endHours), 1) + 1, String);
-
-  // Duration chart with goal line plugin
-  const durationWithGoalOptions: ChartOptions<"bar"> = {
-    ...durationOptions,
-    plugins: {
-      ...durationOptions.plugins,
-    },
-  };
-
-  // ── Duration chart with goal annotation drawn via afterDraw ─────────────────
-  const goalLinePlugin = {
-    id: "goalLine",
-    afterDraw(chart: Chart) {
-      const { ctx, scales, chartArea } = chart;
-      if (!scales.y || !chartArea) return;
-      const y = scales.y.getPixelForValue(goalHours);
-      if (y < chartArea.top || y > chartArea.bottom) return;
-      ctx.save();
-      ctx.strokeStyle = "#555";
-      ctx.setLineDash([4, 4]);
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(chartArea.left, y);
-      ctx.lineTo(chartArea.right, y);
-      ctx.stroke();
-      ctx.restore();
-    },
-  };
+  const durationOptions = baseBarOptions(10, 22, (v) => `${v}h`);
+  const distOptions = baseBarOptions(0, maxStart + 1, String);
+  const endDistOptions = baseBarOptions(0, maxEnd + 1, String);
+  const weeklyOptions = baseBarOptions(0, 100, (v) => `${v}%`);
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto px-4 pt-4 pb-6 gap-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <h1
-          className="font-mono text-xl font-bold tracking-widest uppercase text-white"
-          style={{ letterSpacing: "0.15em" }}
-        >
-          FAST//TRACK
-        </h1>
-        <span className="font-mono text-[10px] uppercase tracking-widest text-[#666]">
-          ANALYTICS
-        </span>
+    <div
+      className="flex flex-col h-full overflow-y-auto"
+      style={{ background: "#FFFFFF" }}
+    >
+      <div className="flex flex-col px-5 pt-5 pb-8 gap-6">
+
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <h1
+            style={{
+              fontSize: "20px",
+              fontWeight: 800,
+              color: "#1C1C1E",
+              letterSpacing: "-0.02em",
+              fontFamily: "-apple-system, 'SF Pro Display', sans-serif",
+            }}
+          >
+            FAST//TRACK
+          </h1>
+          <span
+            style={{
+              fontSize: "11px",
+              fontWeight: 600,
+              color: "#8E8E93",
+              textTransform: "uppercase",
+              letterSpacing: "0.08em",
+            }}
+          >
+            Analytics
+          </span>
+        </div>
+
+        {/* Overview */}
+        <section>
+          <SectionHeader>Overview</SectionHeader>
+          <div className="grid grid-cols-2 gap-3">
+            <StatCard
+              label="Avg Fast"
+              value={`${avgFastHours.toFixed(1)}h`}
+              sub={`${goalHitRate}% goal hit rate`}
+            />
+            <StatCard
+              label="Total Fasts"
+              value={String(totalFasts)}
+              sub="last 28 days"
+            />
+            <StatCard
+              label="Usual Start"
+              value={usualStart}
+              sub="avg start time"
+            />
+            <StatCard
+              label="First Meal"
+              value={firstMeal}
+              sub="avg break-fast"
+            />
+          </div>
+        </section>
+
+        {/* Duration chart */}
+        <section>
+          <SectionHeader>Fasting Duration — Last 14 Days</SectionHeader>
+          <ChartCard height={180}>
+            <Bar
+              data={durationData}
+              options={durationOptions}
+              plugins={[goalLinePlugin(goalHours)]}
+            />
+          </ChartCard>
+        </section>
+
+        {/* Start time distribution */}
+        <section>
+          <SectionHeader>Start Time Distribution</SectionHeader>
+          <ChartCard height={160}>
+            <Bar data={startDistData} options={distOptions} />
+          </ChartCard>
+        </section>
+
+        {/* First meal distribution */}
+        <section>
+          <SectionHeader>First Meal Distribution</SectionHeader>
+          <ChartCard height={160}>
+            <Bar data={endDistData} options={endDistOptions} />
+          </ChartCard>
+        </section>
+
+        {/* Weekly goal achievement */}
+        <section>
+          <SectionHeader>Weekly Goal Achievement</SectionHeader>
+          <ChartCard height={160}>
+            <Bar data={weeklyData} options={weeklyOptions} />
+          </ChartCard>
+        </section>
+
       </div>
-
-      {/* Overview 2x2 grid */}
-      <section>
-        <SectionHeader>Overview</SectionHeader>
-        <div className="grid grid-cols-2 gap-3">
-          <StatCard
-            label="Avg Fast"
-            value={`${avgFastHours.toFixed(1)}h`}
-            sub={`${goalHitRate}% goal hit rate`}
-          />
-          <StatCard
-            label="Total Fasts"
-            value={String(totalFasts)}
-            sub="last 28 days"
-          />
-          <StatCard
-            label="Usual Start"
-            value={usualStart}
-            sub="avg start time"
-          />
-          <StatCard
-            label="First Meal"
-            value={firstMeal}
-            sub="avg end time"
-          />
-        </div>
-      </section>
-
-      {/* Duration chart */}
-      <section>
-        <SectionHeader>Fasting Duration — Last 14 Days</SectionHeader>
-        <div
-          className="border border-[#2a2a2a] p-3"
-          style={{ borderRadius: "4px", background: CARD_BG, height: "180px" }}
-        >
-          <Bar
-            data={durationData}
-            options={durationWithGoalOptions}
-            plugins={[goalLinePlugin]}
-          />
-        </div>
-      </section>
-
-      {/* Start time distribution */}
-      <section>
-        <SectionHeader>Start Time Distribution</SectionHeader>
-        <div
-          className="border border-[#2a2a2a] p-3"
-          style={{ borderRadius: "4px", background: CARD_BG, height: "160px" }}
-        >
-          <Bar data={startDistData} options={distOptions} />
-        </div>
-      </section>
-
-      {/* First meal distribution */}
-      <section>
-        <SectionHeader>First Meal Distribution</SectionHeader>
-        <div
-          className="border border-[#2a2a2a] p-3"
-          style={{ borderRadius: "4px", background: CARD_BG, height: "160px" }}
-        >
-          <Bar data={endDistData} options={endDistOptions} />
-        </div>
-      </section>
-
-      {/* Weekly goal achievement */}
-      <section>
-        <SectionHeader>Weekly Goal Achievement</SectionHeader>
-        <div
-          className="border border-[#2a2a2a] p-3"
-          style={{ borderRadius: "4px", background: CARD_BG, height: "160px" }}
-        >
-          <Bar data={weeklyData} options={countOptions} />
-        </div>
-      </section>
     </div>
   );
 }
