@@ -51,8 +51,7 @@ function getWeekDays(): Date[] {
 }
 
 const DAY_LABELS = ["M", "T", "W", "T", "F", "S", "S"];
-const GOAL_MIN = 12;
-const GOAL_MAX = 24;
+const GOAL_OPTIONS = [12, 14, 16, 18, 20, 24];
 
 export default function TimerTab({ state, onChange, streak }: Props) {
   const [now, setNow] = useState(Date.now());
@@ -117,10 +116,6 @@ export default function TimerTab({ state, onChange, streak }: Props) {
     ? state.startTime + goalMs
     : null;
 
-  // Slider fill percentage for background gradient
-  const sliderPct = ((state.goalHours - GOAL_MIN) / (GOAL_MAX - GOAL_MIN)) * 100;
-  const sliderBg = `linear-gradient(to right, #FF6B6B ${sliderPct}%, #F5F5F7 ${sliderPct}%)`;
-
   return (
     <div className="flex flex-col h-full overflow-y-auto" style={{ background: "#FFFFFF" }}>
       <div className="flex flex-col px-5 pt-5 pb-6 gap-5">
@@ -162,44 +157,54 @@ export default function TimerTab({ state, onChange, streak }: Props) {
           </div>
         </div>
 
-        {/* Goal selector slider */}
+        {/* Goal selector pills */}
         <div
           style={{
             background: "#F5F5F7",
             borderRadius: "20px",
-            padding: "16px 18px 14px",
+            padding: "14px 16px",
             boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
           }}
         >
-          <div className="flex flex-col items-center gap-1 mb-3">
-            <span
-              style={{
-                fontSize: "40px",
-                fontWeight: 800,
-                color: "#1C1C1E",
-                lineHeight: 1,
-                fontFamily: "ui-monospace, 'SF Mono', monospace",
-              }}
-            >
-              {state.goalHours}h
-            </span>
-            <span style={{ fontSize: "12px", color: "#8E8E93", fontWeight: 500 }}>
-              fasting goal
-            </span>
-          </div>
-          <input
-            type="range"
-            min={GOAL_MIN}
-            max={GOAL_MAX}
-            step={1}
-            value={state.goalHours}
-            onChange={(e) => onChange({ ...state, goalHours: Number(e.target.value) })}
-            style={{ width: "100%", background: sliderBg, borderRadius: "16px", height: "6px" }}
-            aria-label="Fasting goal hours"
-          />
-          <div className="flex justify-between mt-1">
-            <span style={{ fontSize: "11px", color: "#8E8E93" }}>12h</span>
-            <span style={{ fontSize: "11px", color: "#8E8E93" }}>24h</span>
+          <span
+            style={{
+              display: "block",
+              fontSize: "12px",
+              color: "#8E8E93",
+              fontWeight: 500,
+              marginBottom: "10px",
+            }}
+          >
+            fasting goal
+          </span>
+          <div className="flex gap-2 flex-wrap">
+            {GOAL_OPTIONS.map((h) => {
+              const selected = state.goalHours === h;
+              return (
+                <button
+                  key={h}
+                  onClick={() => onChange({ ...state, goalHours: h })}
+                  style={{
+                    flex: 1,
+                    minWidth: "44px",
+                    height: "40px",
+                    borderRadius: "50px",
+                    border: selected ? "none" : "1.5px solid #D1D1D6",
+                    background: selected ? "#FF6B6B" : "transparent",
+                    color: selected ? "#FFFFFF" : "#1C1C1E",
+                    fontSize: "14px",
+                    fontWeight: 600,
+                    fontFamily: "-apple-system, sans-serif",
+                    cursor: "pointer",
+                    transition: "all 200ms ease",
+                  }}
+                  aria-pressed={selected}
+                  aria-label={`${h} hour fasting goal`}
+                >
+                  {h}h
+                </button>
+              );
+            })}
           </div>
         </div>
 
