@@ -1,0 +1,31 @@
+@import "tailwindcss";
+
+@theme inline {
+  --font-sans: "Inter", "Inter Fallback", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "Courier New", monospace;
+
+  /* FAST//TRACK Design System */
+  --color-background: #ffffff;
+  --color-card: #f7f7f7;
+  --color-foreground: #111111;
+  --color-muted: #888888;
+  --color-border: #e8e8e8;
+  --color-accent-red: #ff5c5c;
+  --color-accent-green: #4caf7d;
+
+  --radius-xl: 0.75rem;
+  --radius-full: 9999px;
+}
+
+html,
+body {
+  background-color: #ffffff;
+  color: #111111;
+  font-family: var(--font-sans);
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Prevent text selection on interactive elements */
+button {
+  user-select: none;
+}
