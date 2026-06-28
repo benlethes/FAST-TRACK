@@ -6,12 +6,10 @@ import { Colors } from '@/constants/colors';
 import { FONT } from '@/constants/fonts';
 import { FastRecord } from '@/constants/mockData';
 import { useFastingContext } from '@/context/FastingContext';
-import { useWeightContext } from '@/context/WeightContext';
 import { Wordmark } from '@/components/Wordmark';
 import { DurationChart } from '@/components/DurationChart';
 import { HorizontalBarChart } from '@/components/HorizontalBarChart';
 import { WeeklyHeatmap } from '@/components/WeeklyHeatmap';
-import { WeightChart } from '@/components/WeightChart';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -139,19 +137,11 @@ const GOAL_HOURS = 16;
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function AnalyticsScreen() {
-  const { fasts: allFasts }           = useFastingContext();
-  const { records: allWeightRecords } = useWeightContext();
+  const { fasts: allFasts } = useFastingContext();
   const [range, setRange]             = useState<RangeKey>('14d');
   const { days }                      = RANGES.find(r => r.key === range)!;
 
   const fasts = useMemo(() => filterFasts(allFasts, days), [allFasts, days]);
-  const weightRecords = useMemo(() => {
-    if (days === null) return allWeightRecords;
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - days);
-    const cutoffStr = cutoff.toISOString().split('T')[0];
-    return allWeightRecords.filter(r => r.date >= cutoffStr);
-  }, [allWeightRecords, days]);
 
   const avgFast     = avg(fasts.map(f => f.durationHours));
   const goalHitRate = fasts.length > 0 ? fasts.filter(f => f.goalHit).length / fasts.length : 0;
@@ -189,22 +179,27 @@ export default function AnalyticsScreen() {
           <View style={styles.rangeBaseline} />
         </View>
 
-        {/* 2×2 stat grid */}
+        {/* 2×2 stat grid — explicit rows to guarantee the matrix layout */}
         <View style={styles.gridWrap}>
-          <View style={styles.grid}>
+          <View style={styles.gridRow}>
             <View style={styles.statTile}>
               <Text style={styles.statNum}>{avgFast.toFixed(1)}</Text>
               <Text style={styles.statName}>Avg Fast</Text>
             </View>
+            <View style={styles.gridVDivider} />
             <View style={styles.statTile}>
               <Text style={styles.statNum}>{fasts.length}</Text>
               <Text style={styles.statName}>Total Fasts</Text>
               <Text style={styles.statSub}>last {days ?? 'all'} days</Text>
             </View>
+          </View>
+          <View style={styles.gridHDivider} />
+          <View style={styles.gridRow}>
             <View style={styles.statTile}>
               <Text style={styles.statNum}>{Math.round(goalHitRate * 100)}%</Text>
               <Text style={styles.statName}>Goal Hit Rate</Text>
             </View>
+            <View style={styles.gridVDivider} />
             <View style={styles.statTile}>
               <Text style={styles.statNum}>{currentStreak}</Text>
               <Text style={styles.statName}>Streak</Text>
@@ -215,7 +210,7 @@ export default function AnalyticsScreen() {
 
         {/* Streaks card */}
         <View style={styles.streaksCard}>
-          <Text style={styles.streaksLabel}>Streaks</Text>
+          <Text style={styles.streaksLabel}>Streaks 🔥</Text>
           <View style={styles.streaksRow}>
             <View style={styles.streakItem}>
               <Text style={styles.streakNum}>{currentStreak}</Text>
@@ -231,9 +226,6 @@ export default function AnalyticsScreen() {
 
         {/* Duration chart */}
         <DurationChart fasts={fasts} goalHours={GOAL_HOURS} />
-
-        {/* Weight chart */}
-        <WeightChart records={weightRecords} />
 
         {/* Start Time distribution */}
         <HorizontalBarChart title="Start Time" buckets={startBuckets} color={Colors.amber} />
@@ -285,13 +277,17 @@ const styles = StyleSheet.create({
   rangeBaseline: { height: 1, backgroundColor: Colors.border },
 
   // 2×2 grid
-  gridWrap: { paddingHorizontal: 20 },
-  grid: {
-    flexDirection: 'row', flexWrap: 'wrap',
-    backgroundColor: '#E0DCD5',
-    rowGap: 1, columnGap: 1,
+  gridWrap: {
+    paddingHorizontal: 20,
+    backgroundColor: Colors.border,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    gap: 1,
   },
-  statTile: { flexBasis: '49.9%', flexGrow: 1, backgroundColor: Colors.card, padding: 14 },
+  gridRow: { flexDirection: 'row', backgroundColor: Colors.border, gap: 1 },
+  gridVDivider: { width: 1, backgroundColor: Colors.border },
+  gridHDivider: { height: 1, backgroundColor: Colors.border },
+  statTile: { flex: 1, backgroundColor: Colors.card, padding: 14 },
   statNum:  { fontSize: 26, fontWeight: '200', color: Colors.textPrimary, fontFamily: FONT },
   statName: { fontSize: 8, color: Colors.textMuted, letterSpacing: 0.12 * 8, textTransform: 'uppercase', fontFamily: FONT, marginTop: 3 },
   statSub:  { fontSize: 8, color: Colors.textMuted, fontFamily: FONT, marginTop: 1 },

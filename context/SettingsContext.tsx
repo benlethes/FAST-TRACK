@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const STORAGE_KEY = '@fasttrack:settings';
 
-export type WeekStart  = 'Monday' | 'Sunday';
+export type WeekStart  = 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday';
 export type TimeFormat = '12h'    | '24h';
 
 interface Settings {

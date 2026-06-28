@@ -5,11 +5,17 @@ import { FONT } from '@/constants/fonts';
 import { FastRecord } from '@/constants/mockData';
 import { useSettings } from '@/context/SettingsContext';
 
-function getWeekDates(startOnMonday: boolean): string[] {
-  const today = new Date();
-  const dow   = today.getDay(); // 0=Sun…6=Sat
-  // Offset so week starts on chosen day
-  const offset = startOnMonday ? (dow + 6) % 7 : dow;
+// Maps WeekStart name → JS getDay() value (0=Sun, 1=Mon, …, 6=Sat)
+const DAY_INDEX: Record<string, number> = {
+  Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3,
+  Thursday: 4, Friday: 5, Saturday: 6,
+};
+const DAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+
+function getWeekDates(startDay: number): string[] {
+  const today  = new Date();
+  const dow    = today.getDay();                     // 0=Sun…6=Sat
+  const offset = (dow - startDay + 7) % 7;          // days since week start
   const first  = new Date(today);
   first.setDate(today.getDate() - offset);
   return Array.from({ length: 7 }, (_, i) => {
@@ -19,10 +25,8 @@ function getWeekDates(startOnMonday: boolean): string[] {
   });
 }
 
-function getDayLabels(startOnMonday: boolean): string[] {
-  return startOnMonday
-    ? ['M', 'T', 'W', 'T', 'F', 'S', 'S']
-    : ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+function getDayLabels(startDay: number): string[] {
+  return Array.from({ length: 7 }, (_, i) => DAY_LABELS[(startDay + i) % 7]);
 }
 
 type DayState = 'completed-hit' | 'completed-missed' | 'today' | 'future';
@@ -60,10 +64,10 @@ interface WeekStripProps {
 
 export function WeekStrip({ isActive, fasts }: WeekStripProps) {
   const { weekStart } = useSettings();
-  const startOnMonday = weekStart === 'Monday';
+  const startDay = DAY_INDEX[weekStart] ?? 1;  // default Monday
 
-  const weekDates = getWeekDates(startOnMonday);
-  const labels    = getDayLabels(startOnMonday);
+  const weekDates = getWeekDates(startDay);
+  const labels    = getDayLabels(startDay);
   const today     = new Date();
   const todayStr  = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
   const byDate    = new Map(fasts.map(f => [f.date, f]));

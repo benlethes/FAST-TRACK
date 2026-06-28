@@ -272,8 +272,13 @@ export default function SettingsScreen() {
         visible={showWeekPicker}
         title="Week starts on"
         options={[
-          { label: 'Monday', value: 'Monday' },
-          { label: 'Sunday', value: 'Sunday' },
+          { label: 'Monday',    value: 'Monday' },
+          { label: 'Tuesday',   value: 'Tuesday' },
+          { label: 'Wednesday', value: 'Wednesday' },
+          { label: 'Thursday',  value: 'Thursday' },
+          { label: 'Friday',    value: 'Friday' },
+          { label: 'Saturday',  value: 'Saturday' },
+          { label: 'Sunday',    value: 'Sunday' },
         ]}
         selected={weekStart}
         onSelect={setWeekStart}

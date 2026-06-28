@@ -1,7 +1,8 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { View } from 'react-native';
-import { useFonts, Caveat_700Bold } from '@expo-google-fonts/caveat';
+import { useFonts } from 'expo-font';
+import { PermanentMarker_400Regular } from '@expo-google-fonts/permanent-marker';
 import { FastingProvider } from '@/context/FastingContext';
 import { WeightProvider } from '@/context/WeightContext';
 import { SettingsProvider } from '@/context/SettingsContext';
@@ -10,7 +11,7 @@ import AuthScreen from './auth';
 
 export default function RootLayout() {
   const { session, loading } = useAuth();
-  const [fontsLoaded] = useFonts({ Caveat_700Bold });
+  const [fontsLoaded] = useFonts({ PermanentMarker_400Regular });
 
   return (
     <SettingsProvider>

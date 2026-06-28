@@ -15,16 +15,16 @@ export function Wordmark() {
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center' },
   word: {
-    fontSize: 22,
-    fontFamily: 'Caveat_700Bold',
+    fontSize: 20,
+    fontFamily: 'PermanentMarker_400Regular',
     color: Colors.textPrimary,
-    letterSpacing: 1,
+    letterSpacing: 0.5,
   },
   slash: {
-    fontSize: 22,
-    fontFamily: 'Caveat_700Bold',
-    color: Colors.red,
-    letterSpacing: -2,
+    fontSize: 20,
+    fontFamily: 'PermanentMarker_400Regular',
+    color: Colors.amber,   // warm orange
+    letterSpacing: -1,
     marginHorizontal: 1,
   },
 });

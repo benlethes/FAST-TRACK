@@ -7,13 +7,19 @@
     "scheme": "fasttrack",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
+    "icon": "./assets/icon.png",
+    "splash": {
+      "backgroundColor": "#F2EFE8"
+    },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.fasttrack.app"
+      "bundleIdentifier": "com.fasttrack.app",
+      "icon": "./assets/icon.png"
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#ffffff"
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#E8291C"
       },
       "package": "com.fasttrack.app"
     },
