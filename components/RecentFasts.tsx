@@ -5,8 +5,8 @@ import { FONT } from '@/constants/fonts';
 import { FastRecord } from '@/constants/mockData';
 
 function formatDate(dateStr: string): string {
-  const d = new Date(dateStr + 'T12:00:00'); // noon to avoid timezone shift
-  const today = new Date();
+  const d         = new Date(dateStr + 'T12:00:00');
+  const today     = new Date();
   const yesterday = new Date();
   yesterday.setDate(today.getDate() - 1);
   if (d.toDateString() === today.toDateString())     return 'Today';
@@ -20,96 +20,85 @@ function formatDuration(h: number): string {
   return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
 }
 
-interface RecentFastsProps {
-  fasts: FastRecord[];
-}
-
-export function RecentFasts({ fasts }: RecentFastsProps) {
+export function RecentFasts({ fasts }: { fasts: FastRecord[] }) {
   const recent = [...fasts]
     .sort((a, b) => b.date.localeCompare(a.date))
     .slice(0, 5);
 
-  if (recent.length === 0) {
-    return (
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Recent</Text>
-        <View style={styles.list}>
-          <View style={styles.empty}>
-            <Text style={styles.emptyText}>No fasts recorded yet. Tap Start Fast to begin.</Text>
-          </View>
-        </View>
-      </View>
-    );
-  }
-
   return (
     <View style={styles.section}>
       <Text style={styles.sectionTitle}>Recent</Text>
-      <View style={styles.list}>
-        {recent.map((f, i) => (
-          <View key={f.id ?? i} style={[styles.row, i === recent.length - 1 && styles.rowLast]}>
-            <View style={[styles.dot, { backgroundColor: f.goalHit ? Colors.green : Colors.coral }]} />
+
+      {recent.length === 0 ? (
+        <View style={styles.emptyRow}>
+          <Text style={styles.emptyText}>No fasts recorded yet.</Text>
+        </View>
+      ) : (
+        recent.map((f, i) => (
+          <View key={f.id ?? i} style={styles.row}>
+            <View style={[styles.dot, { backgroundColor: f.goalHit ? Colors.green : Colors.red }]} />
             <Text style={styles.date}>{formatDate(f.date)}</Text>
             <Text style={styles.duration}>{formatDuration(f.durationHours)}</Text>
-            <View style={[styles.badge, { backgroundColor: (f.goalHit ? Colors.green : Colors.coral) + '22' }]}>
-              <Text style={[styles.badgeText, { color: f.goalHit ? Colors.green : Colors.coral }]}>
+            <View style={[styles.tag, f.goalHit ? styles.tagGoal : styles.tagShort]}>
+              <Text style={[styles.tagText, f.goalHit ? styles.tagTextGoal : styles.tagTextShort]}>
                 {f.goalHit ? 'Goal' : 'Short'}
               </Text>
             </View>
           </View>
-        ))}
-      </View>
+        ))
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  section: { paddingHorizontal: 20, gap: 10 },
+  section: { paddingHorizontal: 20 },
   sectionTitle: {
-    fontSize: 13,
+    fontSize: 9,
     color: Colors.textMuted,
     fontFamily: FONT,
-    letterSpacing: 0.5,
+    letterSpacing: 0.16 * 9,
     textTransform: 'uppercase',
+    marginBottom: 4,
   },
-  list: {
-    backgroundColor: Colors.card,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    overflow: 'hidden',
-  },
+
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    gap: 8,
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
   },
-  rowLast: { borderBottomWidth: 0 },
-  dot: { width: 8, height: 8, borderRadius: 4 },
-  date: { flex: 1, fontSize: 14, color: Colors.textPrimary, fontFamily: FONT },
-  duration: {
+  dot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+  },
+  date: {
+    flex: 1,
     fontSize: 14,
-    fontWeight: '500',
     color: Colors.textPrimary,
     fontFamily: FONT,
-    marginRight: 4,
   },
-  badge: {
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-  },
-  badgeText: { fontSize: 11, fontWeight: '600', fontFamily: FONT },
-  empty: { padding: 20 },
-  emptyText: {
+  duration: {
     fontSize: 14,
-    color: Colors.textMuted,
+    color: Colors.textPrimary,
     fontFamily: FONT,
-    textAlign: 'center',
-    lineHeight: 20,
   },
+
+  tag: {
+    borderRadius: 2,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderWidth: 1,
+  },
+  tagShort: { borderColor: Colors.red },
+  tagGoal:  { borderColor: Colors.green },
+  tagText:  { fontSize: 8, fontFamily: FONT },
+  tagTextShort: { color: '#A32D2D' },
+  tagTextGoal:  { color: '#27500A' },
+
+  emptyRow: { paddingVertical: 10, borderTopWidth: 1, borderTopColor: Colors.border },
+  emptyText: { fontSize: 13, color: Colors.textMuted, fontFamily: FONT },
 });

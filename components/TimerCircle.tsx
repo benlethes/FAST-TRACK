@@ -1,43 +1,20 @@
 import React from 'react';
 import { View, Text, StyleSheet, Dimensions } from 'react-native';
-import Svg, { Circle, Path } from 'react-native-svg';
+import Svg, { Circle } from 'react-native-svg';
 import { Colors } from '@/constants/colors';
-import { FONT, FONT_MONO } from '@/constants/fonts';
+import { FONT } from '@/constants/fonts';
 import { FastRecord } from '@/constants/mockData';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const SIZE = SCREEN_WIDTH * 0.82;
-const STROKE_WIDTH = 22;
-const RADIUS = (SIZE - STROKE_WIDTH) / 2;
-const CENTER = SIZE / 2;
+const { width: SCREEN_W } = Dimensions.get('window');
+const SIZE         = Math.round(SCREEN_W * 0.86);
+const R            = Math.round((SIZE - 20) / 2 - 8);
+const STROKE_WIDTH = 18;
+const CIRCUMFERENCE = 2 * Math.PI * R;
 
-function polarToCartesian(cx: number, cy: number, r: number, angleDeg: number) {
-  const rad = ((angleDeg - 90) * Math.PI) / 180;
-  return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
-}
-
-function arcPath(cx: number, cy: number, r: number, progress: number) {
-  const clamped = Math.min(Math.max(progress, 0.001), 0.9999);
-  const angle = clamped * 360;
-  const start = polarToCartesian(cx, cy, r, 0);
-  const end = polarToCartesian(cx, cy, r, angle);
-  const large = angle > 180 ? 1 : 0;
-  return `M ${start.x} ${start.y} A ${r} ${r} 0 ${large} 1 ${end.x} ${end.y}`;
-}
-
-function formatTime(s: number) {
+function fmtElapsed(s: number): string {
   const h = Math.floor(s / 3600);
   const m = Math.floor((s % 3600) / 60);
-  const sec = s % 60;
-  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
-}
-
-function formatRemaining(elapsed: number, goalH: number) {
-  const rem = Math.max(goalH * 3600 - elapsed, 0);
-  const h = Math.floor(rem / 3600);
-  const m = Math.floor((rem % 3600) / 60);
-  const s = rem % 60;
-  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  return `${h}h ${String(m).padStart(2, '0')}m`;
 }
 
 function fmtDuration(h: number): string {
@@ -48,10 +25,7 @@ function fmtDuration(h: number): string {
 
 function fmtDate(dateStr: string): string {
   const d = new Date(dateStr + 'T12:00:00');
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  if (d.toDateString() === yesterday.toDateString()) return 'Yesterday';
-  return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+  return d.toLocaleDateString('en', { weekday: 'short', day: 'numeric', month: 'short' });
 }
 
 interface TimerCircleProps {
@@ -63,31 +37,33 @@ interface TimerCircleProps {
 }
 
 export function TimerCircle({ isActive, elapsedSeconds, goalHours, progress, fasts = [] }: TimerCircleProps) {
-  const lastFast = fasts.length > 0
+  const lastFast    = fasts.length > 0
     ? [...fasts].sort((a, b) => b.date.localeCompare(a.date))[0]
     : null;
-  const arcColor = progress < 0.5 ? Colors.coral : Colors.green;
+
+  const clampedProg = Math.min(Math.max(progress, 0), 1);
+  const offset      = CIRCUMFERENCE * (1 - clampedProg);
+  const ringColor   = progress >= 1 ? Colors.green : Colors.red;
 
   return (
-    <View style={styles.container}>
-      <Svg width={SIZE} height={SIZE}>
+    <View style={[styles.container, { width: SIZE, height: SIZE }]}>
+      <Svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`}>
         {/* Track */}
         <Circle
-          cx={CENTER}
-          cy={CENTER}
-          r={RADIUS}
-          stroke={Colors.border}
-          strokeWidth={STROKE_WIDTH}
-          fill="none"
+          cx={SIZE / 2} cy={SIZE / 2} r={R}
+          fill="none" stroke="#E0DCD5" strokeWidth={STROKE_WIDTH}
         />
-        {/* Progress arc */}
+        {/* Progress */}
         {isActive && progress > 0 && (
-          <Path
-            d={arcPath(CENTER, CENTER, RADIUS, progress)}
-            stroke={arcColor}
+          <Circle
+            cx={SIZE / 2} cy={SIZE / 2} r={R}
+            fill="none"
+            stroke={ringColor}
             strokeWidth={STROKE_WIDTH}
             strokeLinecap="round"
-            fill="none"
+            strokeDasharray={CIRCUMFERENCE}
+            strokeDashoffset={offset}
+            transform={`rotate(-90 ${SIZE / 2} ${SIZE / 2})`}
           />
         )}
       </Svg>
@@ -95,28 +71,26 @@ export function TimerCircle({ isActive, elapsedSeconds, goalHours, progress, fas
       <View style={styles.inner}>
         {isActive ? (
           <>
-            <Text style={styles.elapsed}>{formatTime(elapsedSeconds)}</Text>
-            <Text style={styles.elapsedLabel}>elapsed</Text>
-            <Text style={styles.remaining}>
-              {formatRemaining(elapsedSeconds, goalHours)} left
+            <Text style={styles.label}>Elapsed</Text>
+            <Text style={styles.bigNum}>{fmtElapsed(elapsedSeconds)}</Text>
+            <Text style={styles.sub}>
+              {Math.round(progress * 100)}% of {goalHours}h goal
             </Text>
           </>
         ) : lastFast ? (
-          <View style={styles.coldCard}>
-            <Text style={styles.coldLabel}>Last fast</Text>
-            <Text style={styles.coldDuration}>{fmtDuration(lastFast.durationHours)}</Text>
-            <Text style={styles.coldDate}>{fmtDate(lastFast.date)}</Text>
-            <View style={styles.coldBadge}>
-              <Text style={[styles.coldBadgeText, { color: lastFast.goalHit ? Colors.green : Colors.coral }]}>
-                {lastFast.goalHit ? '✓ Goal hit' : '✗ Goal missed'}
-              </Text>
-            </View>
-          </View>
+          <>
+            <Text style={styles.label}>Last Fast</Text>
+            <Text style={styles.bigNum}>{fmtDuration(lastFast.durationHours)}</Text>
+            <Text style={styles.sub}>{fmtDate(lastFast.date)}</Text>
+            <Text style={[styles.goalTag, { color: lastFast.goalHit ? Colors.green : Colors.red }]}>
+              {lastFast.goalHit ? '✓ Goal hit' : '× Goal missed'}
+            </Text>
+          </>
         ) : (
-          <View style={styles.coldCard}>
-            <Text style={styles.coldLabel}>No fasts yet</Text>
-            <Text style={styles.coldDate}>Tap Start Fast to begin</Text>
-          </View>
+          <>
+            <Text style={styles.label}>No fasts yet</Text>
+            <Text style={styles.sub}>Tap Start Fast</Text>
+          </>
         )}
       </View>
     </View>
@@ -127,65 +101,39 @@ const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
     justifyContent: 'center',
-    width: SIZE,
-    height: SIZE,
   },
   inner: {
     position: 'absolute',
     alignItems: 'center',
     justifyContent: 'center',
-    width: SIZE - STROKE_WIDTH * 2 - 48,
+    width: SIZE - STROKE_WIDTH * 2 - 40,
   },
-  elapsed: {
-    fontSize: 40,
+  label: {
+    fontSize: 9,
+    color: Colors.textMuted,
+    letterSpacing: 0.16 * 9,
+    textTransform: 'uppercase',
+    fontFamily: FONT,
+    marginBottom: 4,
+  },
+  bigNum: {
+    fontSize: Math.round(SIZE * 0.11),
     fontWeight: '200',
-    fontFamily: FONT_MONO,
     color: Colors.textPrimary,
-    letterSpacing: 1,
-  },
-  elapsedLabel: {
-    fontSize: 12,
-    color: Colors.textMuted,
-    marginTop: 4,
-    letterSpacing: 1.5,
-    textTransform: 'uppercase',
     fontFamily: FONT,
+    letterSpacing: -1,
+    textAlign: 'center',
   },
-  remaining: {
-    fontSize: 14,
-    color: Colors.textMuted,
-    marginTop: 10,
-    fontFamily: FONT_MONO,
-  },
-  coldCard: {
-    alignItems: 'center',
-    gap: 4,
-  },
-  coldLabel: {
-    fontSize: 11,
-    color: Colors.textMuted,
-    letterSpacing: 1.5,
-    textTransform: 'uppercase',
-    fontFamily: FONT,
-  },
-  coldDuration: {
-    fontSize: 30,
-    fontWeight: '300',
-    color: Colors.textPrimary,
-    marginTop: 4,
-    fontFamily: FONT,
-  },
-  coldDate: {
+  sub: {
     fontSize: 13,
     color: Colors.textMuted,
     fontFamily: FONT,
-  },
-  coldBadge: {
     marginTop: 6,
+    textAlign: 'center',
   },
-  coldBadgeText: {
+  goalTag: {
     fontSize: 13,
-    fontWeight: '500',
     fontFamily: FONT,
+    marginTop: 6,
   },
 });

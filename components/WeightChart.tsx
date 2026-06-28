@@ -17,7 +17,6 @@ interface WeightChartProps {
 }
 
 export function WeightChart({ records }: WeightChartProps) {
-  const unit = 'kg';
   if (records.length === 0) {
     return (
       <View style={styles.card}>
@@ -35,7 +34,7 @@ export function WeightChart({ records }: WeightChartProps) {
   const values = sorted.map(r => Math.round(r.weightKg * 10) / 10);
   const minVal = Math.min(...values);
   const maxVal = Math.max(...values);
-  const padding = Math.max((maxVal - minVal) * 0.25, unit === 'lbs' ? 2 : 1);
+  const padding = Math.max((maxVal - minVal) * 0.25, 1);
   const lo = minVal - padding;
   const hi = maxVal + padding;
   const range = hi - lo || 1;
@@ -55,7 +54,7 @@ export function WeightChart({ records }: WeightChartProps) {
   const earliest = values[0];
   const delta = latest - earliest;
   const deltaSign = delta > 0 ? '+' : '';
-  const deltaStr = `${deltaSign}${delta.toFixed(1)} ${unit}`;
+  const deltaStr = `${deltaSign}${delta.toFixed(1)} kg`;
   const deltaColor = delta <= 0 ? Colors.green : Colors.coral;
 
   return (

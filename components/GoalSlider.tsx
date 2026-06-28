@@ -3,12 +3,11 @@ import { View, Text, PanResponder, StyleSheet } from 'react-native';
 import { Colors } from '@/constants/colors';
 import { FONT } from '@/constants/fonts';
 
-const MIN = 12;
-const MAX = 24;
-const THUMB = 26;
-const TRACK_H = 5;
+const MIN  = 12;
+const MAX  = 24;
+const THUMB = 22;
+const TRACK_H = 4;
 const SNAP = [12, 14, 16, 18, 20, 22, 24];
-const DEFAULT = 16;
 
 interface GoalSliderProps {
   value: number;
@@ -18,8 +17,8 @@ interface GoalSliderProps {
 export function GoalSlider({ value, onValueChange }: GoalSliderProps) {
   const [trackWidth, setTrackWidth] = useState(1);
   const trackWidthRef = useRef(1);
-  const onChangeRef = useRef(onValueChange);
-  const initialX = useRef(0);
+  const onChangeRef   = useRef(onValueChange);
+  const initialX      = useRef(0);
 
   useEffect(() => { onChangeRef.current = onValueChange; }, [onValueChange]);
 
@@ -31,7 +30,7 @@ export function GoalSlider({ value, onValueChange }: GoalSliderProps) {
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder:  () => true,
       onPanResponderGrant: (e) => {
         initialX.current = e.nativeEvent.locationX;
         const pct = Math.max(0, Math.min(1, e.nativeEvent.locationX / trackWidthRef.current));
@@ -44,8 +43,8 @@ export function GoalSlider({ value, onValueChange }: GoalSliderProps) {
     })
   ).current;
 
-  const pct = (value - MIN) / (MAX - MIN);
-  const fillW = Math.max(0, trackWidth * pct);
+  const pct      = (value - MIN) / (MAX - MIN);
+  const fillW    = Math.max(0, trackWidth * pct);
   const thumbLeft = Math.max(0, Math.min(trackWidth - THUMB, fillW - THUMB / 2));
 
   return (
@@ -66,85 +65,63 @@ export function GoalSlider({ value, onValueChange }: GoalSliderProps) {
         }}
         {...panResponder.panHandlers}
       >
-        {/* Track */}
         <View style={styles.track}>
           <View style={[styles.fill, { width: fillW }]} />
         </View>
 
-        {/* Snap ticks — 16h gets special treatment */}
         {SNAP.map(h => {
-          const p = (h - MIN) / (MAX - MIN);
-          const isDefault = h === DEFAULT;
+          const p       = (h - MIN) / (MAX - MIN);
           const isFilled = h <= value;
           return (
             <View
               key={h}
               style={[
                 styles.tick,
-                isDefault ? styles.tickDefault : undefined,
                 {
-                  left: trackWidth * p - (isDefault ? 2 : 1),
-                  backgroundColor: isFilled
-                    ? (isDefault ? Colors.background : Colors.background)
-                    : (isDefault ? Colors.coral : Colors.border),
+                  left:            trackWidth * p - 1,
+                  backgroundColor: isFilled ? Colors.background : Colors.border,
                 },
               ]}
             />
           );
         })}
 
-        {/* Thumb */}
         <View style={[styles.thumb, { left: thumbLeft }]}>
           <View style={styles.thumbInner} />
         </View>
       </View>
 
-      {/* Labels row */}
       <View style={styles.labelsRow}>
-        {SNAP.map(h => {
-          const isDefault = h === DEFAULT;
-          const isActive = h === value;
-          return (
-            <View key={h} style={styles.labelItem}>
-              <Text style={[
-                styles.snapLabel,
-                isActive && styles.snapLabelActive,
-                isDefault && !isActive && styles.snapLabelDefault,
-              ]}>
-                {h}h{isDefault ? ' ★' : ''}
-              </Text>
-            </View>
-          );
-        })}
+        {SNAP.map(h => (
+          <View key={h} style={styles.labelItem}>
+            <Text style={[styles.snapLabel, h === value && styles.snapLabelActive]}>
+              {h}h
+            </Text>
+          </View>
+        ))}
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrapper: {
-    paddingHorizontal: 20,
-    gap: 12,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
+  wrapper: { paddingHorizontal: 20, gap: 10 },
+  header:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   label: {
-    fontSize: 13,
+    fontSize: 9,
     color: Colors.textMuted,
     fontFamily: FONT,
-    letterSpacing: 0.3,
+    letterSpacing: 0.16 * 9,
+    textTransform: 'uppercase',
   },
   chip: {
-    backgroundColor: Colors.coral,
-    borderRadius: 10,
+    backgroundColor: Colors.red,
+    borderRadius: 3,
     paddingHorizontal: 10,
     paddingVertical: 3,
   },
   chipText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '500',
     color: '#fff',
     fontFamily: FONT,
@@ -161,22 +138,16 @@ const styles = StyleSheet.create({
   },
   fill: {
     height: '100%',
-    backgroundColor: Colors.coral,
+    backgroundColor: Colors.red,
     borderRadius: TRACK_H / 2,
   },
   tick: {
     position: 'absolute',
     width: 2,
-    height: 8,
+    height: 7,
     borderRadius: 1,
     top: '50%',
-    marginTop: -4,
-  },
-  tickDefault: {
-    width: 3,
-    height: 14,
-    borderRadius: 1.5,
-    marginTop: -7,
+    marginTop: -3.5,
   },
   thumb: {
     position: 'absolute',
@@ -185,37 +156,27 @@ const styles = StyleSheet.create({
     borderRadius: THUMB / 2,
     backgroundColor: Colors.background,
     borderWidth: 2,
-    borderColor: Colors.coral,
+    borderColor: Colors.red,
     alignItems: 'center',
     justifyContent: 'center',
     top: '50%',
     marginTop: -THUMB / 2,
   },
   thumbInner: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: Colors.coral,
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: Colors.red,
   },
-  labelsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  labelItem: {
-    alignItems: 'center',
-  },
+  labelsRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  labelItem: { alignItems: 'center' },
   snapLabel: {
-    fontSize: 10,
+    fontSize: 9,
     color: Colors.textMuted,
     fontFamily: FONT,
   },
   snapLabelActive: {
-    color: Colors.coral,
+    color: Colors.red,
     fontWeight: '600',
-    fontSize: 11,
-  },
-  snapLabelDefault: {
-    color: Colors.coral,
-    opacity: 0.6,
   },
 });

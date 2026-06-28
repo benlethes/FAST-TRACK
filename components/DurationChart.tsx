@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Alert } from 'react-native';
 import Svg, { Rect, Line, Circle, Path, Text as SvgText } from 'react-native-svg';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 import { Colors } from '@/constants/colors';
 import { FONT } from '@/constants/fonts';
 import { FastRecord } from '@/constants/mockData';
@@ -30,7 +32,7 @@ export function DurationChart({ fasts, goalHours }: DurationChartProps) {
   if (fasts.length === 0) {
     return (
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Fasting Duration</Text>
+        <Text style={styles.cardTitle}>Fasting duration</Text>
         <Text style={styles.empty}>No data for this period</Text>
       </View>
     );
@@ -38,26 +40,38 @@ export function DurationChart({ fasts, goalHours }: DurationChartProps) {
 
   const maxVal = Math.max(...fasts.map(f => f.durationHours), goalHours) + 1.5;
   const minVal = Math.max(0, Math.min(...fasts.map(f => f.durationHours)) - 1.5);
-  const range = maxVal - minVal || 1;
+  const range  = maxVal - minVal || 1;
 
-  const barW = Math.min(INNER_W / fasts.length - 3, 18);
+  const barW   = Math.min(INNER_W / fasts.length - 3, 18);
   const yScale = (v: number) => PAD.top + INNER_H - ((v - minVal) / range) * INNER_H;
   const xScale = (i: number) => PAD.left + (i + 0.5) * (INNER_W / fasts.length);
-  const goalY = yScale(goalHours);
+  const goalY  = yScale(goalHours);
 
   const durations = fasts.map(f => f.durationHours);
-  const avgLine = rollingAvg(durations, 7);
-
-  const linePath = (vals: number[]) =>
+  const avgLine   = rollingAvg(durations, 7);
+  const linePath  = (vals: number[]) =>
     vals.map((v, i) => `${i === 0 ? 'M' : 'L'} ${xScale(i)} ${yScale(v)}`).join(' ');
 
   const showLabels = [0, Math.floor(fasts.length / 2), fasts.length - 1];
 
+  const handleExport = async () => {
+    try {
+      const csv  = ['date,duration_hours,goal_hit']
+        .concat(fasts.map(f => `${f.date},${f.durationHours},${f.goalHit}`))
+        .join('\n');
+      const path = `${FileSystem.cacheDirectory}fasting-duration.csv`;
+      await FileSystem.writeAsStringAsync(path, csv);
+      await Sharing.shareAsync(path, { mimeType: 'text/csv', dialogTitle: 'Export chart data' });
+    } catch {
+      Alert.alert('Export failed', 'Could not export chart data.');
+    }
+  };
+
   return (
     <View style={styles.card}>
       <View style={styles.header}>
-        <Text style={styles.cardTitle}>Fasting Duration</Text>
-        <View style={styles.toggle}>
+        <Text style={styles.cardTitle}>Fasting duration</Text>
+        <View style={styles.controls}>
           {(['Bar', 'Line'] as const).map(m => (
             <TouchableOpacity
               key={m}
@@ -97,22 +111,21 @@ export function DurationChart({ fasts, goalHours }: DurationChartProps) {
                   width={barW}
                   height={Math.max(h, 2)}
                   rx={2}
-                  fill={f.goalHit ? Colors.green : Colors.coral}
-                  opacity={0.8}
+                  fill={f.goalHit ? Colors.green : Colors.red}
+                  opacity={0.85}
                 />
               );
             })
           : (
             <>
               <Path d={linePath(avgLine)} stroke={Colors.textMuted} strokeWidth={1.2} fill="none" opacity={0.45} />
-              <Path d={linePath(durations)} stroke={Colors.coral} strokeWidth={2} fill="none" />
+              <Path d={linePath(durations)} stroke={Colors.red} strokeWidth={2} fill="none" />
               {fasts.map((f, i) => (
-                <Circle key={i} cx={xScale(i)} cy={yScale(f.durationHours)} r={2.5} fill={f.goalHit ? Colors.green : Colors.coral} />
+                <Circle key={i} cx={xScale(i)} cy={yScale(f.durationHours)} r={2.5} fill={f.goalHit ? Colors.green : Colors.red} />
               ))}
             </>
           )}
 
-        {/* Axis labels */}
         {showLabels.map(i => {
           const f = fasts[i];
           if (!f) return null;
@@ -123,7 +136,6 @@ export function DurationChart({ fasts, goalHours }: DurationChartProps) {
             </SvgText>
           );
         })}
-
         <SvgText x={PAD.left - 4} y={goalY + 3} fontSize={9} fill={Colors.textMuted} textAnchor="end" opacity={0.7}>
           {goalHours}h
         </SvgText>
@@ -131,6 +143,11 @@ export function DurationChart({ fasts, goalHours }: DurationChartProps) {
           {Math.round(maxVal)}h
         </SvgText>
       </Svg>
+
+      {/* Export chart — small secondary button, not full-width */}
+      <TouchableOpacity style={styles.exportBtn} onPress={handleExport} activeOpacity={0.7}>
+        <Text style={styles.exportText}>Export Chart</Text>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -138,9 +155,6 @@ export function DurationChart({ fasts, goalHours }: DurationChartProps) {
 const styles = StyleSheet.create({
   card: {
     backgroundColor: Colors.card,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: Colors.border,
     padding: 16,
     marginHorizontal: 20,
   },
@@ -151,11 +165,31 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   cardTitle: {
-    fontSize: 15,
-    fontWeight: '500',
+    fontSize: 14,
     color: Colors.textPrimary,
     fontFamily: FONT,
   },
+  controls: { flexDirection: 'row', gap: 4 },
+  toggleBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 3,
+    backgroundColor: Colors.background,
+  },
+  toggleBtnActive: {
+    backgroundColor: Colors.black,
+    borderColor: Colors.black,
+  },
+  toggleText: {
+    fontSize: 9,
+    color: Colors.textMuted,
+    fontFamily: FONT,
+    letterSpacing: 0.1 * 9,
+    textTransform: 'uppercase',
+  },
+  toggleTextActive: { color: '#fff' },
   empty: {
     fontSize: 13,
     color: Colors.textMuted,
@@ -163,26 +197,19 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingVertical: 24,
   },
-  toggle: {
-    flexDirection: 'row',
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 8,
-    overflow: 'hidden',
+  exportBtn: {
+    alignSelf: 'flex-start',
+    backgroundColor: Colors.black,
+    borderRadius: 3,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    marginTop: 12,
   },
-  toggleBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    backgroundColor: Colors.background,
-  },
-  toggleBtnActive: { backgroundColor: Colors.coral },
-  toggleText: {
-    fontSize: 11,
-    color: Colors.textMuted,
+  exportText: {
+    fontSize: 8,
+    color: Colors.background,
     fontFamily: FONT,
-  },
-  toggleTextActive: {
-    color: '#fff',
-    fontWeight: '600',
+    letterSpacing: 0.14 * 8,
+    textTransform: 'uppercase',
   },
 });

@@ -1,29 +1,20 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, SafeAreaView,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, SafeAreaView, Alert,
 } from 'react-native';
 import { Colors } from '@/constants/colors';
 import { FONT, FONT_MONO } from '@/constants/fonts';
 import { useFasting } from '@/hooks/useFasting';
 import { useFastingContext } from '@/context/FastingContext';
+import { useSettings, fmtTime } from '@/context/SettingsContext';
+import { FastRecord } from '@/constants/mockData';
 import { Wordmark } from '@/components/Wordmark';
 import { TimerCircle } from '@/components/TimerCircle';
 import { WeekStrip } from '@/components/WeekStrip';
 import { GoalSlider } from '@/components/GoalSlider';
 import { FastingStage } from '@/components/FastingStage';
 import { RecentFasts } from '@/components/RecentFasts';
-import { TimeAdjustModal } from '@/components/TimeAdjustModal';
-import { WeightModal } from '@/components/WeightModal';
-
-function fmt(d: Date | null): string {
-  if (!d) return '–– : ––';
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-}
-
-function goalTime(start: Date | null, hours: number): string {
-  if (!start) return '–– : ––';
-  return fmt(new Date(start.getTime() + hours * 3600_000));
-}
+import { DatePickerModal } from '@/components/DatePickerModal';
 
 function localDate(d: Date): string {
   const y = d.getFullYear();
@@ -32,72 +23,112 @@ function localDate(d: Date): string {
   return `${y}-${m}-${dd}`;
 }
 
+function computeCurrentStreak(fasts: FastRecord[]): number {
+  if (fasts.length === 0) return 0;
+  const sorted = [...fasts].sort((a, b) => b.date.localeCompare(a.date));
+  let streak = 0;
+  const d = new Date();
+  for (let i = 0; i < 365; i++) {
+    const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const fast = sorted.find(x => x.date === ds);
+    if (fast && fast.goalHit) {
+      streak++;
+    } else if (i > 0) {
+      break;
+    }
+    d.setDate(d.getDate() - 1);
+  }
+  return streak;
+}
+
+type EndedFast = { startTime: Date; endTime: Date };
+
 export default function HomeScreen() {
-  const { isActive, startTime, elapsedSeconds, goalHours, setGoalHours, startFast, stopFast, progress } =
-    useFasting();
+  const { isActive, startTime, elapsedSeconds, goalHours, setGoalHours,
+          startFast, stopFast, adjustStartTime, progress } = useFasting();
   const { fasts, saveFast } = useFastingContext();
+  const { timeFormat, defaultGoal } = useSettings();
 
-  const [showStartModal, setShowStartModal]   = useState(false);
-  const [showEndModal, setShowEndModal]       = useState(false);
-  const [showWeightModal, setShowWeightModal] = useState(false);
-  const capturedStartRef = useRef<Date | null>(null);
+  const [endedFast, setEndedFast]             = useState<EndedFast | null>(null);
+  const [showStartAdjust, setShowStartAdjust] = useState(false);
+  const [showEndAdjust, setShowEndAdjust]     = useState(false);
 
-  const now = new Date();
-  const maxPast24 = new Date(now.getTime() - 24 * 3600_000);
+  // Use defaultGoal to initialise on first render
+  React.useEffect(() => {
+    if (!isActive && !endedFast) {
+      setGoalHours(defaultGoal);
+    }
+  // Only run when defaultGoal changes, not on every render
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultGoal]);
 
-  // ── Start flow ──────────────────────────────────────────────────────────────
-  const handleStartPress = () => setShowStartModal(true);
-
-  const handleStartConfirm = (t: Date) => {
-    setShowStartModal(false);
-    startFast(t);
+  const handleMainButton = async () => {
+    if (endedFast) {
+      const { startTime: st, endTime: et } = endedFast;
+      const durationHours = (et.getTime() - st.getTime()) / 3600_000;
+      const saved = await saveFast({
+        date: localDate(st),
+        startTime: fmtTime(st, '24h'),
+        endTime: fmtTime(et, '24h'),
+        durationHours: Math.round(durationHours * 100) / 100,
+        goalHours,
+        goalHit: durationHours >= goalHours,
+      });
+      if (saved) {
+        setEndedFast(null);
+      } else {
+        Alert.alert('Save failed', 'Your fast could not be saved. Please check your connection and try again.');
+      }
+    } else if (isActive) {
+      const capturedStart = startTime ?? new Date();
+      stopFast();
+      setEndedFast({ startTime: capturedStart, endTime: new Date() });
+    } else {
+      startFast();
+    }
   };
 
-  // ── End flow ────────────────────────────────────────────────────────────────
-  const handleEndPress = () => {
-    // Capture the start time BEFORE stopping the timer
-    capturedStartRef.current = startTime;
-    setShowEndModal(true);
+  const handleStartAdjustConfirm = (t: Date) => {
+    setShowStartAdjust(false);
+    if (endedFast) {
+      setEndedFast(prev => prev ? { ...prev, startTime: t } : null);
+    } else {
+      adjustStartTime(t);
+    }
   };
 
-  const handleEndConfirm = (endTime: Date) => {
-    setShowEndModal(false);
-    const start = capturedStartRef.current;
-    if (!start) return;
-
-    stopFast();
-
-    const durationHours = (endTime.getTime() - start.getTime()) / 3600_000;
-    saveFast({
-      date: localDate(start),
-      startTime: fmt(start),
-      endTime: fmt(endTime),
-      durationHours: Math.round(durationHours * 100) / 100,
-      goalHours,
-      goalHit: durationHours >= goalHours,
-    });
+  const handleEndAdjustConfirm = (t: Date) => {
+    setShowEndAdjust(false);
+    setEndedFast(prev => prev ? { ...prev, endTime: t } : null);
   };
 
-  const handleEndCancel = () => {
-    setShowEndModal(false);
-    // don't stop the fast — user cancelled
-  };
+  const streak    = computeCurrentStreak(fasts);
+  const maxPast24 = new Date(Date.now() - 24 * 3600_000);
+  const showStickyButton = isActive || !!endedFast;
 
-  const STREAK = fasts.filter(f => f.goalHit).length > 0 ? 7 : 0;
+  const buttonLabel = endedFast ? 'Save Fast' : isActive ? 'End Fast' : 'Start Fast';
+  const buttonStyle = endedFast
+    ? styles.mainButtonSave
+    : isActive
+    ? styles.mainButtonEnd
+    : styles.mainButton;
 
   return (
     <SafeAreaView style={styles.safe}>
+      {/* ── Scrollable content ── */}
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, showStickyButton && { paddingBottom: 80 }]}
         showsVerticalScrollIndicator={false}
       >
         {/* Top bar */}
         <View style={styles.topBar}>
           <Wordmark />
-          <View style={styles.streakBadge}>
-            <Text style={styles.streakText}>🔥 {STREAK} days</Text>
-          </View>
+          {streak > 0 && (
+            <View style={styles.streakBadge}>
+              <Text style={styles.streakText}>{streak} {streak === 1 ? 'day' : 'days'}</Text>
+            </View>
+          )}
         </View>
 
         <GoalSlider value={goalHours} onValueChange={setGoalHours} />
@@ -118,149 +149,126 @@ export default function HomeScreen() {
 
         {isActive && <FastingStage elapsedSeconds={elapsedSeconds} />}
 
-        {isActive && (
+        {/* Stat row (active or ended-pending) */}
+        {(isActive || endedFast) && (
           <View style={styles.statRow}>
-            <View style={styles.statTile}>
+            <TouchableOpacity style={styles.statTile} onPress={() => setShowStartAdjust(true)} activeOpacity={0.7}>
               <Text style={styles.statLabel}>Started</Text>
-              <Text style={styles.statValue}>{fmt(startTime)}</Text>
-            </View>
-            <View style={styles.statTile}>
-              <Text style={styles.statLabel}>Goal at</Text>
-              <Text style={styles.statValue}>{goalTime(startTime, goalHours)}</Text>
-            </View>
+              <Text style={styles.statValue}>{fmtTime(endedFast?.startTime ?? startTime, timeFormat)}</Text>
+              <Text style={styles.statHint}>tap to adjust</Text>
+            </TouchableOpacity>
+            {isActive ? (
+              <View style={styles.statTile}>
+                <Text style={styles.statLabel}>Goal at</Text>
+                <Text style={styles.statValue}>
+                  {startTime ? fmtTime(new Date(startTime.getTime() + goalHours * 3600_000), timeFormat) : '––'}
+                </Text>
+              </View>
+            ) : (
+              <TouchableOpacity style={styles.statTile} onPress={() => setShowEndAdjust(true)} activeOpacity={0.7}>
+                <Text style={styles.statLabel}>Ended</Text>
+                <Text style={styles.statValue}>{fmtTime(endedFast?.endTime ?? null, timeFormat)}</Text>
+                <Text style={styles.statHint}>tap to adjust</Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
 
-        <TouchableOpacity
-          style={[styles.mainButton, isActive && styles.mainButtonEnd]}
-          onPress={isActive ? handleEndPress : handleStartPress}
-          activeOpacity={0.85}
-        >
-          <Text style={styles.mainButtonText}>{isActive ? 'End Fast' : 'Start Fast'}</Text>
-        </TouchableOpacity>
+        {/* Start Fast button — only inside scroll when NOT active */}
+        {!showStickyButton && (
+          <TouchableOpacity style={styles.mainButton} onPress={handleMainButton} activeOpacity={0.85}>
+            <Text style={styles.mainButtonText}>Start Fast</Text>
+          </TouchableOpacity>
+        )}
 
-        <TouchableOpacity
-          style={styles.weightButton}
-          onPress={() => setShowWeightModal(true)}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.weightButtonText}>⚖ Log Weight</Text>
-        </TouchableOpacity>
-
-        {!isActive && <RecentFasts fasts={fasts} />}
+        {!isActive && !endedFast && <RecentFasts fasts={fasts} />}
       </ScrollView>
 
-      {/* Start time modal */}
-      <TimeAdjustModal
-        visible={showStartModal}
-        title="When did you start fasting?"
-        subtitle="Adjust if you forgot to start on time"
-        initialTime={now}
-        minTime={maxPast24}
-        maxTime={now}
-        confirmLabel="Start Fast"
-        onConfirm={handleStartConfirm}
-        onCancel={() => setShowStartModal(false)}
-      />
+      {/* ── Sticky End / Save button ── */}
+      {showStickyButton && (
+        <View style={styles.stickyWrap}>
+          <TouchableOpacity style={[styles.mainButton, buttonStyle]} onPress={handleMainButton} activeOpacity={0.85}>
+            <Text style={styles.mainButtonText}>{buttonLabel}</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
-      {/* End time modal */}
-      <TimeAdjustModal
-        visible={showEndModal}
-        title="When did you break your fast?"
-        subtitle="Adjust if you forgot to stop in time"
-        initialTime={now}
-        minTime={startTime ?? maxPast24}
-        maxTime={now}
-        referenceStart={startTime ?? undefined}
-        confirmLabel="Save Fast"
-        onConfirm={handleEndConfirm}
-        onCancel={handleEndCancel}
+      <DatePickerModal
+        visible={showStartAdjust}
+        title="Start time"
+        value={endedFast?.startTime ?? startTime ?? new Date()}
+        minimumDate={maxPast24}
+        maximumDate={endedFast?.endTime ?? new Date()}
+        confirmLabel="Update start time"
+        onConfirm={handleStartAdjustConfirm}
+        onCancel={() => setShowStartAdjust(false)}
       />
-
-      <WeightModal visible={showWeightModal} onClose={() => setShowWeightModal(false)} />
+      <DatePickerModal
+        visible={showEndAdjust}
+        title="End time"
+        value={endedFast?.endTime ?? new Date()}
+        minimumDate={endedFast?.startTime ?? maxPast24}
+        maximumDate={new Date()}
+        confirmLabel="Update end time"
+        onConfirm={handleEndAdjustConfirm}
+        onCancel={() => setShowEndAdjust(false)}
+      />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: Colors.background },
-  scroll: { flex: 1 },
-  content: { paddingBottom: 36, gap: 22 },
+  safe:    { flex: 1, backgroundColor: Colors.background },
+  scroll:  { flex: 1 },
+  content: { paddingBottom: 36, gap: 18 },
+
   topBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 14,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 20, paddingTop: 14,
   },
   streakBadge: {
-    backgroundColor: Colors.card,
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    borderWidth: 1, borderColor: Colors.border, borderRadius: 4,
+    paddingHorizontal: 10, paddingVertical: 4,
   },
-  streakText: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: Colors.textPrimary,
-    fontFamily: FONT,
-  },
-  section: { paddingHorizontal: 20 },
-  circleWrap: { alignItems: 'center', paddingHorizontal: 20 },
+  streakText: { fontSize: 11, fontWeight: '400', color: Colors.textPrimary, fontFamily: FONT, letterSpacing: 0.5 },
+
+  section:    { paddingHorizontal: 20 },
+  circleWrap: { alignItems: 'center' },
+
   statRow: { flexDirection: 'row', gap: 12, paddingHorizontal: 20 },
   statTile: {
-    flex: 1,
-    backgroundColor: Colors.card,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    padding: 14,
-    alignItems: 'center',
+    flex: 1, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.border,
+    borderRadius: 4, padding: 14, alignItems: 'center',
   },
   statLabel: {
-    fontSize: 11,
-    color: Colors.textMuted,
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-    fontFamily: FONT,
+    fontSize: 9, color: Colors.textMuted, letterSpacing: 0.16 * 9,
+    textTransform: 'uppercase', fontFamily: FONT,
   },
   statValue: {
-    fontSize: 22,
-    fontWeight: '300',
-    color: Colors.textPrimary,
-    marginTop: 4,
-    fontFamily: FONT_MONO,
+    fontSize: 20, fontWeight: '200', color: Colors.textPrimary,
+    marginTop: 4, fontFamily: FONT_MONO,
   },
+  statHint: { fontSize: 9, color: Colors.textMuted, fontFamily: FONT, marginTop: 3 },
+
   mainButton: {
-    marginHorizontal: 20,
-    backgroundColor: Colors.amber,
-    borderRadius: 30,
-    paddingVertical: 18,
-    alignItems: 'center',
+    marginHorizontal: 20, backgroundColor: Colors.red,
+    borderRadius: 3, height: 46, alignItems: 'center', justifyContent: 'center',
   },
-  mainButtonEnd: { backgroundColor: Colors.sky },
+  mainButtonEnd:  { backgroundColor: Colors.black },
+  mainButtonSave: { backgroundColor: Colors.green },
   mainButtonText: {
-    color: '#FFFFFF',
-    fontSize: 17,
-    fontWeight: '500',
-    letterSpacing: 0.5,
-    fontFamily: FONT,
+    color: '#FFFFFF', fontSize: 11, fontWeight: '400',
+    letterSpacing: 0.20 * 11, textTransform: 'uppercase', fontFamily: FONT,
   },
-  weightButton: {
-    marginHorizontal: 20,
-    backgroundColor: Colors.card,
-    borderRadius: 30,
-    paddingVertical: 14,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  weightButtonText: {
-    color: Colors.textPrimary,
-    fontSize: 15,
-    fontWeight: '400',
-    fontFamily: FONT,
+
+  stickyWrap: {
+    position: 'absolute',
+    bottom: 0, left: 0, right: 0,
+    paddingHorizontal: 0,
+    paddingBottom: 16,
+    paddingTop: 8,
+    backgroundColor: Colors.background,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
   },
 });

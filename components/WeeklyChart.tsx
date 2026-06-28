@@ -22,7 +22,7 @@ export function WeeklyChart({ weeks }: { weeks: WeekBucket[] }) {
 
   const getColor = (rate: number) => {
     if (rate >= 0.7) return Colors.green;
-    if (rate >= 0.4) return Colors.orange;
+    if (rate >= 0.4) return Colors.amber;
     return Colors.coral;
   };
 
@@ -53,7 +53,7 @@ export function WeeklyChart({ weeks }: { weeks: WeekBucket[] }) {
       <View style={styles.legend}>
         {[
           { color: Colors.green, label: '≥70%' },
-          { color: Colors.orange, label: '40–70%' },
+          { color: Colors.amber, label: '40–70%' },
           { color: Colors.coral, label: '<40%' },
         ].map(item => (
           <View key={item.label} style={styles.legendItem}>
