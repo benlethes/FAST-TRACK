@@ -1,0 +1,29 @@
+{
+  "expo": {
+    "name": "FAST//TRACK",
+    "slug": "fast-track",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "fasttrack",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.fasttrack.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.fasttrack.app"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      "@react-native-community/datetimepicker"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
