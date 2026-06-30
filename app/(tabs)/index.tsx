@@ -41,11 +41,11 @@ function computeCurrentStreak(fasts: FastRecord[]): number {
   return streak;
 }
 
-type EndedFast = { startTime: Date; endTime: Date };
+type EndedFast = { startTime: Date; endTime: Date; supabaseId: string | null };
 
 export default function HomeScreen() {
   const { isActive, startTime, elapsedSeconds, goalHours, setGoalHours,
-          startFast, stopFast, adjustStartTime, progress } = useFasting();
+          startFast, stopFast, adjustStartTime, progress, activeFastId } = useFasting();
   const { fasts, saveFast } = useFastingContext();
   const { timeFormat, defaultGoal } = useSettings();
 
@@ -64,8 +64,9 @@ export default function HomeScreen() {
 
   const handleMainButton = async () => {
     if (endedFast) {
-      const { startTime: st, endTime: et } = endedFast;
+      const { startTime: st, endTime: et, supabaseId } = endedFast;
       const durationHours = (et.getTime() - st.getTime()) / 3600_000;
+      // If we have a supabaseId, UPDATE the partial row; otherwise INSERT fresh
       const saved = await saveFast({
         date: localDate(st),
         startTime: fmtTime(st, '24h'),
@@ -73,7 +74,7 @@ export default function HomeScreen() {
         durationHours: Math.round(durationHours * 100) / 100,
         goalHours,
         goalHit: durationHours >= goalHours,
-      });
+      }, supabaseId ?? undefined);
       if (saved) {
         setEndedFast(null);
       } else {
@@ -81,8 +82,9 @@ export default function HomeScreen() {
       }
     } else if (isActive) {
       const capturedStart = startTime ?? new Date();
+      const capturedId = activeFastId;   // capture before stopFast clears it
       stopFast();
-      setEndedFast({ startTime: capturedStart, endTime: new Date() });
+      setEndedFast({ startTime: capturedStart, endTime: new Date(), supabaseId: capturedId });
     } else {
       startFast();
     }

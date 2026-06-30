@@ -3,9 +3,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/lib/supabase';
 import { FastRecord, MOCK_FASTS } from '@/constants/mockData';
 
-// Marks that mock data has been seeded into Supabase for this device.
-// Using a separate key from the old AsyncStorage version so fresh devices
-// still get seeded even if they upgraded from the previous local-only build.
 const SUPABASE_SEEDED_KEY = '@fasttrack:supabase_seeded';
 
 // ─── Row ↔ FastRecord mapping ─────────────────────────────────────────────────
@@ -24,7 +21,7 @@ function fromRow(row: Record<string, unknown>): FastRecord {
 
 function toRow(fast: FastRecord, userId: string) {
   return {
-    id:             fast.id ?? Date.now().toString(),
+    id:             fast.id,
     user_id:        userId,
     date:           fast.date,
     start_time:     fast.startTime,
@@ -35,12 +32,31 @@ function toRow(fast: FastRecord, userId: string) {
   };
 }
 
+function localDateStr(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function localTimeStr(d: Date): string {
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
 // ─── Context ──────────────────────────────────────────────────────────────────
 
 interface FastingContextType {
   fasts: FastRecord[];
   loaded: boolean;
-  saveFast: (fast: Omit<FastRecord, 'id'>) => Promise<boolean>;
+  // Save a completed fast. Pass the Supabase row id to UPDATE an existing
+  // partial row; omit (or pass undefined) to INSERT a new one.
+  saveFast: (fast: Omit<FastRecord, 'id'>, id?: string) => Promise<boolean>;
+  // Insert a partial row (end_time = null) when a fast begins. Returns the
+  // row id on success, or null if offline / auth unavailable.
+  beginFast: (start: Date, goalHours: number) => Promise<string | null>;
+  // Query Supabase for an in-progress fast (end_time IS NULL) for the current
+  // user. Used on app load to survive logout / re-login.
+  loadActiveFast: () => Promise<{ id: string; start: Date; goalHours: number } | null>;
+  // Update the start_time columns on an existing partial row when the user
+  // back-dates a running fast.
+  updateActiveFastStart: (id: string, newStart: Date) => Promise<void>;
   importFasts: (records: FastRecord[]) => Promise<void>;
   resetToMockData: () => Promise<void>;
   clearAllData: () => Promise<void>;
@@ -50,6 +66,9 @@ const FastingContext = createContext<FastingContextType>({
   fasts: [],
   loaded: false,
   saveFast: async () => false,
+  beginFast: async () => null,
+  loadActiveFast: async () => null,
+  updateActiveFastStart: async () => {},
   importFasts: async () => {},
   resetToMockData: async () => {},
   clearAllData: async () => {},
@@ -73,6 +92,7 @@ export function FastingProvider({ children }: { children: React.ReactNode }) {
       .from('fasts')
       .select('*')
       .eq('user_id', userId)
+      .not('end_time', 'is', null)   // exclude in-progress partial rows
       .order('date', { ascending: false });
     if (error) { console.error('loadFasts:', error.message); return []; }
     const records = (data ?? []).map(fromRow);
@@ -80,16 +100,12 @@ export function FastingProvider({ children }: { children: React.ReactNode }) {
     return records;
   }, []);
 
-  // Subscribe to auth changes so the context works whether the provider
-  // mounts before or after the session is available, and so it reloads
-  // if the user signs out and back in without unmounting.
   useEffect(() => {
     let initialized = false;
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, session) => {
         if (session?.user?.id) {
-          // Only do the initial load once per provider lifetime.
           if (initialized) return;
           initialized = true;
           const uid = session.user.id;
@@ -112,7 +128,6 @@ export function FastingProvider({ children }: { children: React.ReactNode }) {
             }
           })();
         } else {
-          // Signed out — reset state so it's clean on next login.
           setFasts([]);
           setLoaded(false);
           initialized = false;
@@ -125,27 +140,78 @@ export function FastingProvider({ children }: { children: React.ReactNode }) {
 
   // ── Write ─────────────────────────────────────────────────────────────────────
 
-  const saveFast = useCallback(async (fast: Omit<FastRecord, 'id'>): Promise<boolean> => {
+  // Saves a completed fast. If `id` is provided, UPDATEs the existing partial
+  // row (the one inserted by beginFast); otherwise INSERTs a fresh row.
+  const saveFast = useCallback(async (fast: Omit<FastRecord, 'id'>, id?: string): Promise<boolean> => {
     const session = await getSession();
     if (!session?.user) return false;
-    const record: FastRecord = { ...fast, id: Date.now().toString() };
-    const { error } = await supabase.from('fasts').insert(toRow(record, session.user.id));
+    const record: FastRecord = { ...fast, id: id ?? Date.now().toString() };
+    const row = toRow(record, session.user.id);
+    const { error } = id
+      ? await supabase.from('fasts').update(row).eq('id', id)
+      : await supabase.from('fasts').insert(row);
     if (error) { console.error('saveFast:', error.message); return false; }
     setFasts(prev =>
-      [record, ...prev].sort((a, b) =>
+      [record, ...prev.filter(f => f.id !== record.id)].sort((a, b) =>
         b.date !== a.date ? b.date.localeCompare(a.date) : b.startTime.localeCompare(a.startTime)
       )
     );
     return true;
   }, []);
 
+  // Inserts a partial row when a fast begins (end_time stays null until the
+  // fast is ended and saved). Returns the row id, or null on failure.
+  const beginFast = useCallback(async (start: Date, goalHours: number): Promise<string | null> => {
+    const session = await getSession();
+    if (!session?.user) return null;
+    const id = `active_${Date.now()}`;
+    const { error } = await supabase.from('fasts').insert({
+      id,
+      user_id:        session.user.id,
+      date:           localDateStr(start),
+      start_time:     localTimeStr(start),
+      end_time:       null,
+      duration_hours: null,
+      goal_hours:     goalHours,
+      goal_hit:       null,
+    });
+    if (error) { console.error('beginFast:', error.message); return null; }
+    return id;
+  }, []);
+
+  // Returns the most recent in-progress fast for the current user, or null.
+  const loadActiveFast = useCallback(async (): Promise<{ id: string; start: Date; goalHours: number } | null> => {
+    const session = await getSession();
+    if (!session?.user) return null;
+    const { data, error } = await supabase
+      .from('fasts')
+      .select('id, date, start_time, goal_hours')
+      .eq('user_id', session.user.id)
+      .is('end_time', null)
+      .order('date', { ascending: false })
+      .limit(1);
+    if (error || !data || data.length === 0) return null;
+    const row = data[0];
+    // Reconstruct local datetime — date+time stored in device-local timezone
+    const start = new Date(`${row.date}T${row.start_time}:00`);
+    if (isNaN(start.getTime())) return null;
+    return { id: row.id as string, start, goalHours: row.goal_hours as number };
+  }, []);
+
+  // Updates the date/start_time columns when the user back-dates a running fast.
+  const updateActiveFastStart = useCallback(async (id: string, newStart: Date): Promise<void> => {
+    const { error } = await supabase
+      .from('fasts')
+      .update({ date: localDateStr(newStart), start_time: localTimeStr(newStart) })
+      .eq('id', id);
+    if (error) console.error('updateActiveFastStart:', error.message);
+  }, []);
+
   const importFasts = useCallback(async (records: FastRecord[]) => {
     const session = await getSession();
     if (!session?.user) return;
     const uid = session.user.id;
-
     await supabase.from('fasts').delete().eq('user_id', uid);
-
     const rows = records.map((f, i) =>
       toRow({ ...f, id: f.id ?? `import_${Date.now()}_${i}` }, uid)
     );
@@ -158,9 +224,7 @@ export function FastingProvider({ children }: { children: React.ReactNode }) {
     const session = await getSession();
     if (!session?.user) return;
     const uid = session.user.id;
-
     await supabase.from('fasts').delete().eq('user_id', uid);
-
     const rows = MOCK_FASTS.map((f, i) => toRow({ ...f, id: `mock_${i}` }, uid));
     const { error } = await supabase.from('fasts').insert(rows);
     if (error) { console.error('resetToMockData:', error.message); return; }
@@ -175,7 +239,11 @@ export function FastingProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <FastingContext.Provider value={{ fasts, loaded, saveFast, importFasts, resetToMockData, clearAllData }}>
+    <FastingContext.Provider value={{
+      fasts, loaded,
+      saveFast, beginFast, loadActiveFast, updateActiveFastStart,
+      importFasts, resetToMockData, clearAllData,
+    }}>
       {children}
     </FastingContext.Provider>
   );
